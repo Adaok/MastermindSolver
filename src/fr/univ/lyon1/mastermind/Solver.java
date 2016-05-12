@@ -35,8 +35,11 @@ public class Solver {
 	}
 
 	public static List<Code> solve(Scorer scorer) {
-		//Contains the list of codes leading to the solution
+		// Contains the list of codes leading to the solution
 		List<Code> solution = new ArrayList<>();
+
+		int nCPU = Runtime.getRuntime().availableProcessors();
+		executor = Executors.newFixedThreadPool(nCPU + 1);
 
 		final int codeLength = scorer.getCodeLength();
 		if (codeLength > MAX_CODE_LENGTH) {
@@ -45,16 +48,26 @@ public class Solver {
 
 		untriedGuesses = allCodes(codeLength);
 		possibleSecrets = new LinkedList<Code>(untriedGuesses);
-		
+
 		Code guess = initialGuess(codeLength);
 
 		Score winningScore = Score.valueOf(codeLength, 0);
 		boolean found = false;
 
+		Map<Score, List<Code>> possibleScores = new HashMap<Score, List<Code>>();
+		Map<Code, Map<Score, List<Code>>> combineScoreUncertainity = new HashMap<Code, Map<Score, List<Code>>>();
+
 		do {
 			// Add guess to the solution
+			solution.add(guess);
+
 			// score the last guess
-			// Filter the list of possible secrets to remove the ones that aren't consistent with this score
+			Score score = scorer.score(guess);
+
+			// Filter the list of possible secrets to remove the ones that
+			// aren't consistent with this score
+			Solver.filterPossibleSecrets(possibleSecrets, guess, score);
+
 			// Test if the search is over
 			if (score.equals(winningScore)) {
 				found = true;
@@ -62,12 +75,78 @@ public class Solver {
 				solution.add(possibleSecrets.get(0));
 				found = true;
 			} else {
-				// Remove the last guess from the untriedGuesses (optimization : remember the index)
-				
-				//TODO: Evaluate concurrently untriedGuesses and pick the most interesting one
-				
+				// Remove the last guess from the untriedGuesses (optimization :
+				// remember the index)
+
+				// TODO: Evaluate concurrently untriedGuesses and pick the most
+				// interesting one
+				untriedGuesses.remove(guess);
+
+				combineScoreUncertainity.clear();
+				possibleScores.clear();
+
+				CompletionService<Map<Code, Map<Score, List<Code>>>> completionService = new ExecutorCompletionService<Map<Code, Map<Score, List<Code>>>>(
+						executor);
+
+				for (final Code possibleGuess : untriedGuesses) {
+					completionService.submit(new Callable<Map<Code, Map<Score, List<Code>>>>() {
+
+						@Override
+						public Map<Code, Map<Score, List<Code>>> call() throws Exception {
+
+							Map<Score, List<Code>> possibleScores = new HashMap<Score, List<Code>>();
+
+							possibleScores.clear();
+							for (Code possibleSecret : possibleSecrets) {
+								Score aScore = Scorer.score(possibleGuess, possibleSecret);
+								if (!possibleScores.containsKey(aScore)) {
+									List<Code> solList = new ArrayList<Code>();
+									solList.add(possibleSecret);
+									possibleScores.put(aScore, solList);
+								} else {
+									(possibleScores.get(aScore)).add(possibleGuess);
+								}
+							}
+							Map<Code, Map<Score, List<Code>>> scoreUncertainity = new HashMap<Code, Map<Score, List<Code>>>();
+							scoreUncertainity.put(possibleGuess, possibleScores);
+
+							return scoreUncertainity;
+						}
+					});
+				}
 				try {
-					//TODO: Pick the untried guess whose evaluation gives the lowest number
+					// TODO: Pick the untried guess whose evaluation gives the
+					// lowest number
+					for (int t = 0; t < untriedGuesses.size(); t++) {
+						Future<Map<Code, Map<Score, List<Code>>>> f = completionService.take();
+						Map<Code, Map<Score, List<Code>>> data = f.get();
+						for (Code aCode : data.keySet()) {
+							combineScoreUncertainity.put(aCode, data.get(aCode));
+						}
+					}
+					List<CodeMaxUncertainty> incertitudeList = new ArrayList<CodeMaxUncertainty>();
+
+					for (Code codeKey : combineScoreUncertainity.keySet()) {
+						Map<Score, List<Code>> matches = combineScoreUncertainity.get(codeKey);
+						CodeMaxUncertainty cmu = new CodeMaxUncertainty(null, Integer.MAX_VALUE);
+						for (Score scoreKey : matches.keySet()) {
+							int numberOfSolutions = matches.get(scoreKey).size();
+							if (numberOfSolutions < cmu.getAmbiguity()) {
+								cmu = new CodeMaxUncertainty(codeKey, numberOfSolutions);
+							}
+						}
+						incertitudeList.add(cmu);
+					}
+
+					CodeMaxUncertainty nextTry = new CodeMaxUncertainty(null, Integer.MAX_VALUE);
+
+					for (CodeMaxUncertainty cmuu : incertitudeList) {
+						if (cmuu.getAmbiguity() < nextTry.getAmbiguity()) {
+							nextTry = cmuu;
+						}
+					}
+
+					guess = nextTry.getCode();
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				} catch (ExecutionException e) {
@@ -90,7 +169,16 @@ public class Solver {
 	}
 
 	private static void filterPossibleSecrets(List<Code> possibleSecrets, Code guess, Score score) {
-		//TODO: à implémenter
+		// TODO: à implémenter
+		List<Code> impossibleCodes = new ArrayList<Code>();
+		for (Code possibleSecret : possibleSecrets) {
+			Score tempScore = Scorer.score(guess, possibleSecret);
+			if (score.getBlackCount() != tempScore.getBlackCount()
+					|| score.getWhiteCount() != tempScore.getWhiteCount()) {
+				impossibleCodes.add(possibleSecret);
+			}
+		}
+		possibleSecrets.removeAll(impossibleCodes);
 	}
 
 	static Code initialGuess(int codeLength) {
