@@ -1,13 +1,13 @@
 package fr.univ.lyon1.mastermind;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class Scorer {
 	private final Code secret;
-	private final static Map<KeyScore,Score> map = new HashMap<KeyScore,Score>();
+	private final static ConcurrentMap<KeyScore,Score> map = new ConcurrentHashMap<KeyScore,Score>();
 
 	public Scorer(Code secret) {
 		super();
