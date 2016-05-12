@@ -27,7 +27,9 @@ public class SolverTest {
 	@Test
 	public void testSolution() {
 		//TODO: à compléter
-		
+		Code code = Code.valueOf(RED,GREEN,PURPLE,BLUE);
+		List<Code> sol = Solver.solve(new Scorer(code));
+		assertEquals(sol.get(sol.size()-1), code);
 	}
 	
 
