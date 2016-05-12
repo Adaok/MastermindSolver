@@ -12,7 +12,7 @@ public class Solver {
 	private static ExecutorService executor;
 	private volatile static List<Code> untriedGuesses;
 	private volatile static List<Code> possibleSecrets;
-
+	
 	static List<Code> allCodes(int codeLength) {
 		Peg[] colors = Peg.values();
 		int colorCount = colors.length;

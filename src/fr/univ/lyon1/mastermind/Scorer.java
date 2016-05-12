@@ -1,10 +1,13 @@
 package fr.univ.lyon1.mastermind;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Scorer {
 	private final Code secret;
+	private final static Map<KeyScore,Score> map = new HashMap<KeyScore,Score>();
 
 	public Scorer(Code secret) {
 		super();
@@ -16,9 +19,16 @@ public class Scorer {
 	}
 
 	public static Score score(Code guess, Code secret) {
-		int blackCount = exactMatches(guess, secret);
-		int whiteCount = matches(guess, secret) - blackCount;
-		return Score.valueOf(blackCount, whiteCount);
+		KeyScore key = new KeyScore(guess,secret);
+		if(!map.containsKey(key)){
+			int blackCount = exactMatches(guess, secret);
+			int whiteCount = matches(guess, secret) - blackCount;
+			Score tmp = Score.valueOf(blackCount, whiteCount);
+			map.put(new KeyScore(guess,secret),tmp);
+			return tmp;
+		}else{
+			return map.get(key);
+		}
 	}
 
 	public int getCodeLength() {
@@ -52,4 +62,45 @@ public class Scorer {
 		return matchesCount;
 	}
 
+	private static class KeyScore{
+		Code guess;
+		Code secret;
+		
+		public KeyScore(Code guess , Code secret){
+			this.guess = guess;
+			this.secret = secret;
+		}
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((guess == null) ? 0 : guess.hashCode());
+			result = prime * result + ((secret == null) ? 0 : secret.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			KeyScore other = (KeyScore) obj;
+			if (guess == null) {
+				if (other.guess != null)
+					return false;
+			} else if (!guess.equals(other.guess))
+				return false;
+			if (secret == null) {
+				if (other.secret != null)
+					return false;
+			} else if (!secret.equals(other.secret))
+				return false;
+			return true;
+		}
+	}
+	
 }
